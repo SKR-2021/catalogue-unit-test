@@ -1,0 +1,42 @@
+        stage('Dependabot Security Gate') {
+
+            environment {
+                GITHUB_OWNER = 'SKR-2021'
+                GITHUB_REPO  = 'catalogue'
+                GITHUB_API   = 'https://api.github.com'
+            }
+
+            steps {
+                withCredentials([string(credentialsId: 'github-dependabot', variable: 'GITHUB_TOKEN')]) {
+
+                    sh '''
+                        echo "Fetching Dependabot alerts..."
+
+                        response=$(curl -s \
+                            -H "Authorization: Bearer $GITHUB_TOKEN" \
+                            -H "Accept: application/vnd.github+json" \
+                            "$GITHUB_API/repos/$GITHUB_OWNER/$GITHUB_REPO/dependabot/alerts?per_page=100")
+
+                        echo "$response" > dependabot_alerts.json
+
+                        high_critical_open_count=$(echo "$response" | jq '[.[] 
+                            | select(
+                                .state == "open" and
+                                (.security_advisory.severity == "high" 
+                                or .security_advisory.severity == "critical")
+                            )
+                        ] | length')
+
+                        echo "Open HIGH/CRITICAL Dependabot alerts: $high_critical_open_count"
+
+                        if [ "$high_critical_open_count" -gt 0 ]; then
+                            echo "HIGH/CRITICAL Dependabot alerts found, please fix"
+                            
+                        else
+                            echo "No HIGH/CRITICAL Dependabot alerts"
+                        fi
+                    '''
+                }
+            }
+        }
+    
